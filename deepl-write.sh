@@ -42,7 +42,7 @@ set -- "${POSITIONAL[@]:-}" # restore positional parameters
 
 # help ########################################################################
 if [ -z "$1" ]; then
-  echo "Home made DeepL CLI (${VERSION}; https://github.com/AlexanderWillner/deepl-alfred-workflow2)"
+  echo "Home made DeepL CLI (${VERSION}; https://github.com/matteocodogno/deepl-alfred-workflow2)"
   echo ""
   echo "SYNTAX : $0 [-l language] <query>" >&2
   echo "Example: $0 -l EN \"This is just an example.\""

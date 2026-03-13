@@ -24,7 +24,7 @@ workflow5:
 	@rm info.plist
 
 feedback:
-	@open https://github.com/alexanderwillner/deepl-alfred-workflow2/issues
+	@open https://github.com/matteocodogno/deepl-alfred-workflow2/issues
 
 bats:
 	@echo "Running dynamic tests..."

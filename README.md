@@ -1,6 +1,6 @@
 # Alfred DeepL Translation Workflow
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/1772be5a3aa4423a8dd122877896ce36)](https://www.codacy.com/gh/AlexanderWillner/deepl-alfred-workflow2/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=AlexanderWillner/deepl-alfred-workflow2&amp;utm_campaign=Badge_Grade) [![download](https://img.shields.io/github/downloads/AlexanderWillner/deepl-alfred-workflow2/total)](https://github.com/AlexanderWillner/deepl-alfred-workflow2/releases)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/1772be5a3aa4423a8dd122877896ce36)](https://www.codacy.com/gh/matteocodogno/deepl-alfred-workflow2/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=matteocodogno/deepl-alfred-workflow2&amp;utm_campaign=Badge_Grade) [![download](https://img.shields.io/github/downloads/matteocodogno/deepl-alfred-workflow2/total)](https://github.com/matteocodogno/deepl-alfred-workflow2/releases)
 
 ## Usage
 
@@ -30,7 +30,7 @@ However, you can also get a (free or paid) [```API key```](https://www.deepl.com
 
 ## Installing the Workflow
 
-1. Simply download the [last release](https://github.com/AlexanderWillner/deepl-alfred-workflow2/releases)
+1. Simply download the [last release](https://github.com/matteocodogno/deepl-alfred-workflow2/releases)
 2. Unzip the file on your computer
 3. Install `Deepl-Translate.alfredworkflow` by double-clicking the workflow file and clicking on "Import".
 

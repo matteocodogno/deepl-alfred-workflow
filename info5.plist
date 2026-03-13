@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>bundleid</key>
-	<string>ws.willner.alex.alfred.deepl</string>
+	<string>co.codogno.matteo.alfred.deepl</string>
 	<key>category</key>
 	<string>Productivity</string>
 	<key>connections</key>
@@ -144,7 +144,7 @@
 		</array>
 	</dict>
 	<key>createdby</key>
-	<string>Alexander Willner</string>
+	<string>Matteo Codogno</string>
 	<key>description</key>
 	<string>Translation using deepl.com</string>
 	<key>disabled</key>
@@ -780,6 +780,6 @@ To avoid the error message 'too many requests', please configure your free (or p
 	<key>version</key>
 	<string>2.2.2</string>
 	<key>webaddress</key>
-	<string>https://github.com/AlexanderWillner/deepl-alfred-workflow2</string>
+	<string>https://github.com/matteocodogno/deepl-alfred-workflow2</string>
 </dict>
 </plist>
