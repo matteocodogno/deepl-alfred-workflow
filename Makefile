@@ -32,7 +32,7 @@ bats:
 	@bats deepl.bats
 
 dyntest:
-	@DEEPL_KEY= ./deepl.sh -l EN "Guten Morgen." 2>&1|grep "Good morning"
+	./deepl.sh -l EN "Guten Morgen." 2>&1|grep "Good morning"
 	@./deepl.sh -l EN "Guten Morgen." 2>&1|grep "Good morning"
 
 test:

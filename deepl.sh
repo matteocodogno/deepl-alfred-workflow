@@ -1,205 +1,311 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# setup #######################################################################
-#set -o errexit -o pipefail -o noclobber -o nounset
+set -o errexit
+set -o pipefail
+set -o nounset
+
+# -----------------------------------------------------------------------------
+# Config
+# -----------------------------------------------------------------------------
 LANGUAGE="${DEEPL_TARGET:-EN}"
 LANGUAGE_SOURCE="${DEEPL_SOURCE:-auto}"
-LANGUAGE_PREFERRED="${DEEPL_PREFERRED:-[\"DE\",\"EN\"]}"
 KEY="${DEEPL_KEY:-}"
-PRO="${DEEPL_PRO:-}"
-# see https://developers.deepl.com/docs/api-reference/translate/openapi-spec-for-text-translation
+PRO="${DEEPL_PRO:-0}"
 FORMALITY="${DEEPL_FORMALITY:-prefer_less}"
 POSTFIX="${DEEPL_POSTFIX:-.}"
-VERSION="2.1.0"
-PATH="$PATH:/usr/local/bin/"
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-###############################################################################
+VERSION="3.0.0"
+DEBUG="${DEEPL_DEBUG:-0}"
+DEEPL_HOST="${DEEPL_HOST:-}"
 
-# helper functions ############################################################
-function printJson() {
-  echo '{"items": [{"uid": null,"arg": "'"$1"'","valid": "yes","autocomplete": "autocomplete","title": "'"$1"'"}]}'
+PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+log() {
+  if [[ "$DEBUG" == "1" ]]; then
+    echo >&2 "[deepl.sh] $*"
+  fi
 }
-###############################################################################
 
-# parameters ##################################################################
+print_json_item() {
+  local title="$1"
+  local arg="$2"
+
+  python3 - "$title" "$arg" <<'PY'
+import json, sys
+title = sys.argv[1]
+arg = sys.argv[2]
+print(json.dumps({
+    "items": [{
+        "uid": None,
+        "title": title,
+        "arg": arg,
+        "valid": True,
+        "autocomplete": "autocomplete"
+    }]
+}, ensure_ascii=False))
+PY
+}
+
+print_json_error() {
+  local message="$1"
+
+  python3 - "$message" <<'PY'
+import json, sys
+message = sys.argv[1]
+print(json.dumps({
+    "items": [{
+        "uid": None,
+        "title": message,
+        "arg": "error",
+        "valid": False
+    }]
+}, ensure_ascii=False))
+PY
+}
+
+trim() {
+  python3 -c 'import sys; print(sys.stdin.read().strip())'
+}
+
+usage() {
+  cat <<EOF
+Home made DeepL CLI (${VERSION})
+
+SYNTAX:
+  $0 [-l language] <query>
+
+Example:
+  $0 -l DE "This is just an example."
+
+Required:
+  Set DEEPL_KEY to use the official DeepL API.
+
+Optional env vars:
+  DEEPL_TARGET       Target language (default: EN)
+  DEEPL_SOURCE       Source language (default: auto)
+  DEEPL_FORMALITY    default | prefer_more | prefer_less | less | more
+  DEEPL_PRO          1 to use api.deepl.com, otherwise api-free.deepl.com
+  DEEPL_HOST         Custom DeepL-compatible host
+  DEEPL_POSTFIX      Postfix required by Alfred workflow UI (default: .)
+  DEEPL_DEBUG        1 to enable debug logs
+EOF
+}
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    print_json_error "Error: required command not found: $cmd"
+    exit 20
+  fi
+}
+
+parse_response() {
+  local response="$1"
+
+  python3 - "$response" <<'PY'
+import json, sys
+
+raw = sys.argv[1]
+
+try:
+    parsed = json.loads(raw)
+except Exception as e:
+    print(json.dumps({
+        "items": [{
+            "title": f"Error parsing JSON response: {e}",
+            "arg": "error",
+            "valid": False
+        }]
+    }, ensure_ascii=False))
+    sys.exit(0)
+
+if isinstance(parsed, dict) and "message" in parsed and "translations" not in parsed:
+    print(json.dumps({
+        "items": [{
+            "title": f"DeepL error: {parsed.get('message', 'unknown error')}",
+            "arg": "error",
+            "valid": False
+        }]
+    }, ensure_ascii=False))
+    sys.exit(0)
+
+translations = parsed.get("translations")
+if not translations:
+    print(json.dumps({
+        "items": [{
+            "title": "Error: no translations found in DeepL response",
+            "arg": "error",
+            "valid": False
+        }]
+    }, ensure_ascii=False))
+    sys.exit(0)
+
+items = []
+for t in translations:
+    text = t.get("text")
+    detected = t.get("detected_source_language")
+    if text:
+        subtitle = f"Detected source: {detected}" if detected else None
+        item = {
+            "title": text,
+            "arg": text,
+            "valid": True
+        }
+        if subtitle:
+            item["subtitle"] = subtitle
+        items.append(item)
+
+if not items:
+    print(json.dumps({
+        "items": [{
+            "title": "Error: translation text missing in response",
+            "arg": "error",
+            "valid": False
+        }]
+    }, ensure_ascii=False))
+    sys.exit(0)
+
+print(json.dumps({"items": items}, ensure_ascii=False, indent=2))
+PY
+}
+
+# -----------------------------------------------------------------------------
+# Args
+# -----------------------------------------------------------------------------
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
-  key="$1"
-  case "$key" in
-  -l | --lang)
-    LANGUAGE="$2"
-    shift # past argument
-    shift # past value
-    ;;
-  *) # unknown option
-    POSITIONAL+=("$1") # save it in an array for later
-    shift              # past argument
-    ;;
+  case "$1" in
+    -l|--lang)
+      [[ $# -lt 2 ]] && { print_json_error "Error: missing value for $1"; exit 21; }
+      LANGUAGE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
   esac
 done
-set -- "${POSITIONAL[@]:-}" # restore positional parameters
-###############################################################################
+set -- "${POSITIONAL[@]:-}"
 
-# help ########################################################################
-if [ -z "$1" ]; then
-  echo "Home made DeepL CLI (${VERSION}; https://github.com/matteocodogno/deepl-alfred-workflow2)"
-  echo ""
-  echo "SYNTAX : $0 [-l language] <query>" >&2
-  echo "Example: $0 -l DE \"This is just an example.\""
-  echo ""
+# -----------------------------------------------------------------------------
+# Input validation
+# -----------------------------------------------------------------------------
+if [[ $# -eq 0 ]] || [[ -z "${1:-}" ]]; then
+  usage
   exit 1
 fi
-###############################################################################
 
-# process query ###############################################################
-query="$1"
-# shellcheck disable=SC2001
-query="$(echo "$query" | sed 's/\"/\\\"/g')"
-# shellcheck disable=SC2001
-query="$(echo "$query" | sed "s/'/\\\'/g")"
-query="$(echo "$query" | iconv -f utf-8-mac -t utf-8 | xargs)"
+require_cmd curl
+require_cmd python3
 
-if [[ $KEY = "" ]] && [[ $query != *"$POSTFIX"   ]]; then
-  printJson "End query with $POSTFIX"
+query="$(printf '%s' "$1" | trim)"
+
+if [[ -z "$query" ]]; then
+  print_json_error "Error: empty query"
   exit 2
 fi
-###############################################################################
 
-# prepare query ###############################################################
-# shellcheck disable=SC2001
-query="$(echo "$query" | sed "s/\\$POSTFIX$//")"
-if [ "$KEY" = "" ]; then
-  FORM_PARAM=''
-else
-  FORM_PARAM='"formality": "'"$FORMALITY"'", '
+# Keep postfix behavior for the Alfred UX, but only as UI sugar.
+if [[ "$query" == *"$POSTFIX" ]]; then
+  query="${query%$POSTFIX}"
+  query="$(printf '%s' "$query" | trim)"
 fi
-data='{"jsonrpc":"2.0","method": "LMT_handle_jobs","params":{"commonJobParams": {'$FORM_PARAM'"browserType": 1, "mode": "translate", "textType": "plaintext"}, "jobs":[{"kind":"default","raw_en_sentence":"'"$query"'","preferred_num_beams":4,"raw_en_context_before":[],"raw_en_context_after":[],"quality":"fast"}],"lang":{"user_preferred_langs":'"${LANGUAGE_PREFERRED}"',"source_lang_user_selected":"'"${LANGUAGE_SOURCE}"'","target_lang":"'"${LANGUAGE:-EN}"'"},"priority":1,"timestamp":1557063997314},"id":79120002}'
-HEADER=(
-  --compressed
-  -H 'authority: www2.deepl.com'
-  -H 'Origin: https://www.deepl.com'
-  -H 'Referer: https://www.deepl.com/translator'
-  -H 'Accept: */*'
-  -H 'Content-Type: application/json'
-  -H 'Accept-Language: en-us'
-  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Safari/605.1.15'
+
+if [[ -z "$KEY" ]]; then
+  print_json_error "Error: set DEEPL_KEY to use the official DeepL API"
+  exit 3
+fi
+
+# -----------------------------------------------------------------------------
+# Endpoint selection
+# -----------------------------------------------------------------------------
+if [[ -n "$DEEPL_HOST" ]]; then
+  url="${DEEPL_HOST%/}/v2/translate"
+elif [[ "$PRO" == "1" ]]; then
+  url="https://api.deepl.com/v2/translate"
+else
+  url="https://api-free.deepl.com/v2/translate"
+fi
+
+log "Using URL: $url"
+log "Target language: $LANGUAGE"
+log "Source language: $LANGUAGE_SOURCE"
+log "Formality: $FORMALITY"
+log "Query: $query"
+
+# -----------------------------------------------------------------------------
+# Request
+# -----------------------------------------------------------------------------
+curl_args=(
+  -sS
+  -X POST "$url"
+  -H "Authorization: DeepL-Auth-Key $KEY"
+  --data-urlencode "text=$query"
+  --data-urlencode "target_lang=$LANGUAGE"
+  --data-urlencode "formality=$FORMALITY"
 )
-###############################################################################
 
-# query #######################################################################
-if [ -n "$KEY" ]; then
-  if [ "$PRO" = "1" ]; then
-    url="https://api.deepl.com/v2/translate"
-  else
-    url="https://api-free.deepl.com/v2/translate"
-  fi
-  if [ ! -z "$DEEPL_HOST" ]; then
-    url="$DEEPL_HOST/v2/translate"
-  fi
-
-  echo >&2 "curl -s -X POST '$url' -H 'Authorization: DeepL-Auth-Key $KEY' --data-urlencode 'text=$query' -d 'formality=$FORMALITY' -d 'target_lang=${LANGUAGE:-EN}'"
-  result=$(curl -s -X POST "$url" -H "Authorization: DeepL-Auth-Key $KEY" --data-urlencode "text=$query" -d "formality=$FORMALITY" -d "target_lang=${LANGUAGE:-EN}")
-  ret=$?
-  if [[ "x$ret" != "x0" ]] || [[ "$result" == "" ]]; then
-    echo >&2 "$ret: $result"
-    http_code=$(curl -s -X POST "$url" -H "Authorization: DeepL-Auth-Key $KEY" --data-urlencode "text=$query" -d "target_lang=${LANGUAGE:-EN}" -d "formality=$FORMALITY" -w %{http_code} -o /dev/null)
-    if [[ $http_code -eq 403 ]]; then
-      printJson "Error: Invalid API key"
-      exit 3
-    fi
-    if [[ $ret -eq 6 ]]; then
-      printJson "Error: DNS resolution failed - no Internet connection?"
-      exit 4
-    fi
-    printJson "Error Code $ret - HTTP Code $http_code"
-    exit 5
-  fi
-  osascript -l JavaScript -e 'function run(argv) {
-    try {
-      const parsed = JSON.parse(argv[0]);
-      if (!parsed || !parsed.translations) {
-        throw new Error("Invalid response structure");
-      }
-      const translations = parsed.translations.map(item => ({
-        title: item["text"],
-        arg: item["text"]
-      }));
-      return JSON.stringify({ items: translations }, null, 2);
-    } catch(e) {
-      return JSON.stringify({ 
-        items: [{ 
-          title: "Error parsing response: " + e.message, 
-          arg: "error",
-          valid: false 
-        }] 
-      }, null, 2);
-    }
-  }' "$result" || {
-    echo >&2 "ERROR w/ key: result '$result', query '$query'"
-    printJson "Error: Failed to parse translation response"
-    exit 10
-  }
-else
-  echo >&2 "curl -s 'https://www2.deepl.com/jsonrpc' '${HEADER[@]}' --data-binary $'$data'"
-  result=$(curl -s 'https://www2.deepl.com/jsonrpc' "${HEADER[@]}" --data-binary $"$data")
-  ret=$?
-  echo >&2 "DEBUG: curl exit code: $ret"
-  echo >&2 "DEBUG: result length: ${#result}"
-  echo >&2 "DEBUG: result first 200 chars: ${result:0:200}"
-  
-  if [[ "x$ret" != "x0" ]] || [[ "$result" == "" ]]; then
-    echo >&2 "$ret: $result"
-    http_code=$(curl -s 'https://www2.deepl.com/jsonrpc' "${HEADER[@]}" --data-binary $"$data" -w %{http_code} -o /dev/null)
-    if [[ $ret -eq 6 ]]; then
-      printJson "Error: DNS resolution failed - no Internet connection?"
-      exit 6
-    fi
-    printJson "Error Code $ret - HTTP Code $http_code"
-    exit 7
-  fi
-  # Validate JSON before parsing
-  if ! echo "$result" | python3 -m json.tool > /dev/null 2>&1; then
-    echo >&2 "ERROR: Invalid JSON response: $result"
-    printJson "Error: Invalid JSON response from DeepL"
-    exit 8
-  fi
-  
-  if [[ $result == *'"error":{"code":'* ]]; then
-    message="$(osascript -l JavaScript -e 'function run(argv) { 
-      try {
-        return JSON.parse(argv[0])["error"]["message"] 
-      } catch(e) {
-        return "JSON parse error: " + e.message
-      }
-    }' "$result")"
-    printJson "Error: $message"
-    exit 8
-  else
-    osascript -l JavaScript -e 'function run(argv) {
-      try {
-        const parsed = JSON.parse(argv[0]);
-        if (!parsed || !parsed.result || !parsed.result.translations || !parsed.result.translations[0] || !parsed.result.translations[0].beams) {
-          throw new Error("Invalid response structure");
-        }
-        const translations = parsed.result.translations[0].beams.map(item => ({
-          title: item["postprocessed_sentence"],
-          arg: item["postprocessed_sentence"]
-        }));
-        return JSON.stringify({ items: translations }, null, 2);
-      } catch(e) {
-        return JSON.stringify({ 
-          items: [{ 
-            title: "Error parsing response: " + e.message, 
-            arg: "error",
-            valid: false 
-          }] 
-        }, null, 2);
-      }
-    }' "$result" || {
-      echo >&2 "ERROR w/o key: result '$result', query '$query'"
-      printJson "Error: Failed to parse translation response"
-      exit 9
-    }
-  fi
+if [[ "${LANGUAGE_SOURCE,,}" != "auto" ]]; then
+  curl_args+=( --data-urlencode "source_lang=$LANGUAGE_SOURCE" )
 fi
-###############################################################################
+
+# Capture body and status separately
+tmp_body="$(mktemp)"
+trap 'rm -f "$tmp_body"' EXIT
+
+http_code="$(
+  curl "${curl_args[@]}" \
+    -o "$tmp_body" \
+    -w '%{http_code}'
+)"
+
+response="$(cat "$tmp_body")"
+
+log "HTTP code: $http_code"
+log "Response: $response"
+
+# -----------------------------------------------------------------------------
+# Error handling
+# -----------------------------------------------------------------------------
+if [[ "$http_code" == "403" ]]; then
+  print_json_error "Error: invalid DeepL API key"
+  exit 4
+fi
+
+if [[ "$http_code" == "456" ]]; then
+  print_json_error "Error: quota exceeded"
+  exit 5
+fi
+
+if [[ "$http_code" == "429" ]]; then
+  print_json_error "Error: too many requests"
+  exit 6
+fi
+
+if [[ ! "$http_code" =~ ^2 ]]; then
+  message="$(
+    python3 - "$response" <<'PY'
+import json, sys
+raw = sys.argv[1]
+try:
+    parsed = json.loads(raw)
+    print(parsed.get("message") or f"HTTP error with unexpected response")
+except Exception:
+    print("HTTP error with non-JSON response")
+PY
+  )"
+  print_json_error "Error: $message (HTTP $http_code)"
+  exit 7
+fi
+
+# -----------------------------------------------------------------------------
+# Success
+# -----------------------------------------------------------------------------
+parse_response "$response"
