@@ -3,3 +3,6 @@ info.plist
 
 # IDE
 .idea
+
+# environment variables
+.env.cached
