@@ -1,6 +1,6 @@
 # Alfred DeepL Translation Workflow
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/1772be5a3aa4423a8dd122877896ce36)](https://www.codacy.com/gh/matteocodogno/deepl-alfred-workflow2/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=matteocodogno/deepl-alfred-workflow2&amp;utm_campaign=Badge_Grade) [![download](https://img.shields.io/github/downloads/matteocodogno/deepl-alfred-workflow2/total)](https://github.com/matteocodogno/deepl-alfred-workflow2/releases)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/1772be5a3aa4423a8dd122877896ce36)](https://www.codacy.com/gh/matteocodogno/deepl-alfred-workflow/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=matteocodogno/deepl-alfred-workflow&amp;utm_campaign=Badge_Grade) [![download](https://img.shields.io/github/downloads/matteocodogno/deepl-alfred-workflow/total)](https://github.com/matteocodogno/deepl-alfred-workflow/releases)
 
 ## Usage
 
@@ -30,7 +30,7 @@ However, you can also get a (free or paid) [```API key```](https://www.deepl.com
 
 ## Installing the Workflow
 
-1. Simply download the [last release](https://github.com/matteocodogno/deepl-alfred-workflow2/releases)
+1. Simply download the [last release](https://github.com/matteocodogno/deepl-alfred-workflow/releases)
 2. Unzip the file on your computer
 3. Install `Deepl-Translate.alfredworkflow` by double-clicking the workflow file and clicking on "Import".
 
@@ -48,45 +48,31 @@ $ ./deepl.sh -l DE "This is just an example."
 {
   "items": [
     {
-      "uid": null,
-      "arg": "Dies ist nur ein Beispiel.",
-      "valid": "yes",
-      "autocomplete": "autocomplete",
-      "title": "Dies ist nur ein Beispiel."
+      "title": "Dies ist nur ein Beispiel.",
+      "arg": "Dies ist nur ein Beispiel."
     },
     {
-      "uid": null,
-      "arg": "Das ist nur ein Beispiel.",
-      "valid": "yes",
-      "autocomplete": "autocomplete",
-      "title": "Das ist nur ein Beispiel."
-    },
-    {
-      "uid": null,
-      "arg": "Dies ist nur ein Beispiel dafür.",
-      "valid": "yes",
-      "autocomplete": "autocomplete",
-      "title": "Dies ist nur ein Beispiel dafür."
-    },
-    {
-      "uid": null,
-      "arg": "Dies ist nur ein exemplarisches Beispiel.",
-      "valid": "yes",
-      "autocomplete": "autocomplete",
-      "title": "Dies ist nur ein exemplarisches Beispiel."
+      "title": "Das ist nur ein Beispiel.",
+      "arg": "Das ist nur ein Beispiel."
     }
   ]
 }
 ```
 
-## Important configuration variables
+## Configuration variables
 
-* `DEEPL_KEY`: the DeepL API key
-* `DEEPL_PRO`: in case you have a professional DeepL account
-* `DEEPL_POSTFIX`: the character to the input should end with to mitigate #5
-* `DEEPL_TARGET`: the target language of the default `dl` keyword
+| Variable | Default | Description |
+|---|---|---|
+| `DEEPL_KEY` | _(empty)_ | DeepL API key; enables authenticated mode |
+| `DEEPL_PRO` | _(empty)_ | Set to `1` for a Pro account |
+| `DEEPL_TARGET` | `EN` | Target language code |
+| `DEEPL_SOURCE` | `auto` | Source language code |
+| `DEEPL_PREFERRED` | `["DE","EN"]` | Preferred languages list (unauthenticated mode) |
+| `DEEPL_FORMALITY` | `prefer_less` | Formality level |
+| `DEEPL_POSTFIX` | `.` | Required suffix when no API key is set |
+| `DEEPL_HOST` | _(empty)_ | Override the API base URL |
 
-## Builing the workflow
+## Building the workflow
 
 To create a modified version of the workflow, edit the files and run ```make workflow``` to create an updated workflow.
 
